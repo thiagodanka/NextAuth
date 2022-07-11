@@ -1,11 +1,11 @@
 import Router from "next/router";
 import { createContext, ReactNode, useEffect, useState } from "react"
-import { api } from "../services/api";
-import { parseCookies, setCookie } from 'nookies'
+import { api } from "../services/apiClient";
+import { parseCookies, setCookie, destroyCookie } from 'nookies'
 
-type User = {
+export type User = {
     email: string;
-    permission: string[];
+    permissions: string[];
     roles: string[];
 
 }
@@ -26,6 +26,13 @@ type AuthProviderProps = {
     children: ReactNode;
 }
 
+export function signOut() {
+    destroyCookie(undefined, 'nextauth.token')
+    destroyCookie(undefined, 'nextauth.refreshToken')
+
+    Router.push('/')
+}
+
 
 export const AuthContext = createContext({} as AuthContextData)
 
@@ -37,22 +44,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { 'nextauth.token': token } = parseCookies()
 
         if (token) {
-            api.get('/me').then(response => {
-                const { email, permission, roles } = response?.data;
+            api.get('/me')
+                .then(response => {
+                    const { email, permissions, roles } = response?.data;
 
-                setUser({ email, permission, roles })
-            })
+                    setUser({ email, permissions, roles })
+                })
+                .catch(() => {
+                    signOut()
+                })
         }
     }, [])
 
     async function signIn({ email, password }: SignInCredentials) {
         try {
+
             const response = await api.post('/sessions', {
                 email,
                 password
             })
 
-            const { token, refreshToken, permission, roles } = response.data
+            const { token, refreshToken, permissions, roles } = response.data
 
             setCookie(undefined, 'nextauth.token', token, {
                 maxAge: 60 * 60 * 24 * 30,
@@ -65,7 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             setUser({
                 email,
-                permission,
+                permissions,
                 roles
             })
 
