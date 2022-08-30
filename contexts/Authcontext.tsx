@@ -3,9 +3,10 @@ import { createContext, ReactNode, useEffect, useState } from "react";
 import { toast } from 'react-toastify';
 import Router from 'next/router'
 import { api } from '../services/apiClient';
+import { channel } from 'diagnostics_channel';
 
 
-
+const toastClosed = 1500; // Tempo em ms para fechar toast
 type User = {
     email: string;
     permissions: string[];
@@ -18,7 +19,8 @@ type SiggnInCredentials = {
 };
 
 type AuthcontextData = {
-    signIn(credentials: SiggnInCredentials): Promise<void>;
+    signIn: (credentials: SiggnInCredentials) => Promise<void>;
+    signOut: () => void;
     user: User | undefined;
     isAuthenticated: boolean;
 };
@@ -29,18 +31,40 @@ type AuthProviderProps = {
 
 export const Authcontext = createContext({} as AuthcontextData)
 
+let authChannel: BroadcastChannel
+
 export function signOut() {
 
     destroyCookie(undefined, 'nextauth.token')
     destroyCookie(undefined, 'nextauth.refreshToken')
 
+    toast.info('Logged out successfully', { autoClose: toastClosed })
+
+    authChannel.postMessage('signOut')
     Router.push('/')
+
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User>();
-
     const isAuthenticated = !!user;
+
+    useEffect(() => {
+        authChannel = new BroadcastChannel('auth')
+
+        authChannel.onmessage = (message) => {
+            switch (message.data) {
+                case "signOut":
+                    Router.push('/');
+                    break;
+                case "signIn":
+                    Router.push('/dashboard');
+                    break;
+                default:
+                    break;
+            }
+        }
+    }, [])
 
     useEffect(() => {
         const { 'nextauth.token': token } = parseCookies()
@@ -87,18 +111,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 roles
             })
 
-            toast.success('Successfully signed in')
+            toast.success('Successfully signed in', { autoClose: toastClosed })
 
             api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
             Router.push('/dashboard')
+            
+            authChannel.postMessage('signIn')
+
         } catch (err: any) {
 
-            toast.error(err.response.data.message)
+            toast.error(err.response.data.message, { autoClose: toastClosed })
         }
     }
     return (
-        <Authcontext.Provider value={{ signIn, isAuthenticated, user }}>
+        <Authcontext.Provider value={{ signIn, signOut, isAuthenticated, user }}>
             {children}
         </Authcontext.Provider >
     )

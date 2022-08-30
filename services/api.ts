@@ -63,9 +63,7 @@ export function setupAPIClient(ctx = undefined) {
 
                             if (typeof window !== 'undefined') {
                                 signOut();
-                            } else {
-                                return Promise.reject(new AuthTokenError);
-                            }
+                            } 
 
                         }).finally(() => {
                             isRefreshing = false;
